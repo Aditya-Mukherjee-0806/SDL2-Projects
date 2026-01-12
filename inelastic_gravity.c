@@ -98,23 +98,23 @@ int main()
     //     createCircle(color, radius, π * radius * radius * DENSITY, pos, vel);
     // }
 
-    // // Central massive body (like the Sun)
-    // VECTOR_2D pos1 = {WIDTH / 2.0, HEIGHT / 2.0};
-    // VECTOR_2D vel1 = {0, 0};
-    // double radius1 = 40;
-    // double mass1 = 100000000;
-    // createCircle(SDL_MapRGB(surface->format, RGB_YELLOW), radius1, mass1, pos1, vel1);
+    // Central massive body (like the Sun)
+    VECTOR_2D pos1 = {WIDTH / 2.0, HEIGHT / 2.0};
+    VECTOR_2D vel1 = {0, 0};
+    double radius1 = 40;
+    double mass1 = 100000000;
+    createCircle(SDL_MapRGB(surface->format, RGB_YELLOW), radius1, mass1, pos1, vel1);
 
-    // // Smaller orbiting body (like a planet)
-    // double distance = 300; // distance from center
-    // VECTOR_2D pos2 = {pos1.x + distance, pos1.y};
-    // double radius2 = 20; // smaller radius
-    // double mass2 = 100000;
+    // Smaller orbiting body (like a planet)
+    double distance = 300; // distance from center
+    VECTOR_2D pos2 = {pos1.x + distance, pos1.y};
+    double radius2 = 20; // smaller radius
+    double mass2 = 100000;
 
-    // // Circular orbit velocity perpendicular to radius
-    // double v = SDL_sqrt(G * mass1 / distance);
-    // VECTOR_2D vel2 = {0, -v}; // moving upwards for clockwise orbit
-    // createCircle(SDL_MapRGB(surface->format, RGB_CYAN), radius2, mass2, pos2, vel2);
+    // Circular orbit velocity perpendicular to radius
+    double v = SDL_sqrt(G * mass1 / distance);
+    VECTOR_2D vel2 = {0, -v}; // moving upwards for clockwise orbit
+    createCircle(SDL_MapRGB(surface->format, RGB_CYAN), radius2, mass2, pos2, vel2);
 
     Uint8 running = 1;
     int frames = 0;
@@ -161,6 +161,7 @@ int main()
     printf("Max. Frame Time: %lf\n", max_frame_time);
     
     SDL_FreeSurface(surface);
+    SDL_DestroyMutex(circles_mutex);
     SDL_DestroyWindow(window);
     SDL_Quit();
     fclose(log_file);

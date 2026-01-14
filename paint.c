@@ -64,14 +64,15 @@ int main()
     initBrushMenu();
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(renderer, RGB_WHITE, SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(renderer);
     renderPalette(renderer);
     renderBrushMenu(renderer);
-
     SDL_RenderPresent(renderer);
 
-    RGB_COLOR color_selected = rgb_colors[WHITE];
+    RGB_COLOR color_selected = rgb_colors[BLACK];
     SDL_SetRenderDrawColor(renderer, color_selected.r, color_selected.g, color_selected.b, SDL_ALPHA_OPAQUE);
-    int brush_size = BRUSH_SIZE_MEDIUM;
+    int brush_size = BRUSH_SIZE_SMALL;
     SDL_bool running = SDL_TRUE;
     while (running)
     {
@@ -176,7 +177,7 @@ void initBrushMenu()
 
 void renderBrushMenu(SDL_Renderer *renderer)
 {
-    SDL_SetRenderDrawColor(renderer, rgb_colors[WHITE].r, rgb_colors[WHITE].g, rgb_colors[WHITE].b, SDL_ALPHA_OPAQUE);
+    SDL_SetRenderDrawColor(renderer, RGB_BLACK, SDL_ALPHA_OPAQUE);
     for (int i = 0; i < BRUSHES_SIZE; i++)
         SDL_RenderDrawRect(renderer, brush_rects + i);
 }

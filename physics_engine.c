@@ -85,7 +85,7 @@ int main()
     const int num_colors = sizeof(colors) / sizeof(colors[0]);
 
     circles_mutex = SDL_CreateMutex();
-    SDL_Thread *input_thread = SDL_CreateThread(waitInput, "input thread", colors);
+    SDL_Thread *input_thread = SDL_CreateThread(waitInput, "input thread", (void *)colors);
 
     for (int i = 0; i < cap; i++)
     {
@@ -134,6 +134,11 @@ int main()
                 break;
             }
         }
+        // if (size == 0 || size == 1)
+        // {
+        //     displayInfo();
+        //     break;
+        // }
         SDL_FillRect(surface, NULL, 0);
         runSimulation(elasticity);
         SDL_UpdateWindowSurface(window);
@@ -294,8 +299,8 @@ void simulateGravitationalForce(Uint8 elasticity)
             {
                 handleCollision(circles + i, circles + j, elasticity);
 
-                // stop calculating with circles[i] in current frame in case of merge
                 if (elasticity == 0)
+                    // stop calculating with circles[i] in current frame in case of merge
                     break;
             }
             double force_magnitude = G * m1 * m2 / SDL_pow(dist, 3);
@@ -399,6 +404,7 @@ int SDLCALL waitInput(void *data)
     const int BUFFER_SIZE = 100;
     char input[BUFFER_SIZE];
     printf("Usage: create <color> <radius> <mass> <posx> <posy> <velx> <vely>\n");
+    // createCircle(colors[0], 100, 1000000, (VECTOR_2D){1000, 500}, (VECTOR_2D){10, 10});
     while (1)
     {
         fgets(input, BUFFER_SIZE, stdin);

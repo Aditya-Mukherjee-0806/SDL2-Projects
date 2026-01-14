@@ -13,6 +13,7 @@
 #define MAX_RADIUS 30
 #define DENSITY 500
 #define LOG_INTERVAL 1
+#define INPUT_BUFFER_SIZE 128
 
 #define RGB_RED 255, 0, 0
 #define RGB_GREEN 0, 255, 0
@@ -34,7 +35,7 @@ typedef struct
 
 typedef struct
 {
-    Uint8 alive;
+    SDL_bool alive;
     Uint16 id;
     Uint32 color;
     double radius;
@@ -51,6 +52,9 @@ CIRCLE *circles;
 int cap = DEFAULT_CAPACITY, size = 0;
 SDL_mutex *circles_mutex;
 
+SDL_bool isPointInsideCircle(VECTOR_2D point, CIRCLE circle);
+void displayInfo();
+void printCircleInfo(CIRCLE circle);
 void createCircle(Uint32 color, double radius, double mass, VECTOR_2D pos, VECTOR_2D vel);
 void runSimulation(Uint8 elasticity);
 void sanitiseCircles();
@@ -58,11 +62,12 @@ void simulateForces(Uint8 elasticity);
 void simulateGravitationalForce(Uint8 elasticity);
 void handleCollision(CIRCLE *c1, CIRCLE *c2, Uint8 elasticity);
 void updatePositions();
-void FillCircles();
 void FillCircle(CIRCLE circle);
-void displayInfo();
-void printCircleInfo(CIRCLE circle);
 int waitInput(void *data);
+void handleCreateInput(char *input);
+void handleClearInput(char *input);
+void handleSetInput(char *input);
+CIRCLE *findCircleById(int id);
 
 int main()
 {
@@ -87,39 +92,40 @@ int main()
     circles_mutex = SDL_CreateMutex();
     SDL_Thread *input_thread = SDL_CreateThread(waitInput, "input thread", (void *)colors);
 
-    for (int i = 0; i < cap; i++)
-    {
-        int radius = rand() % (MAX_RADIUS - MIN_RADIUS) + MIN_RADIUS;
-        Uint32 color = colors[i % num_colors];
-        VECTOR_2D pos = {rand() % WIDTH, rand() % HEIGHT};
-        VECTOR_2D vel = {
-            (double)rand() / RAND_MAX * (rand() % 2 ? 1 : -1),
-            (double)rand() / RAND_MAX * (rand() % 2 ? 1 : -1),
-        };
-        createCircle(color, radius, π * radius * radius * DENSITY, pos, vel);
-    }
+    // for (int i = 0; i < cap; i++)
+    // {
+    //     int radius = rand() % (MAX_RADIUS - MIN_RADIUS) + MIN_RADIUS;
+    //     Uint32 color = colors[i % num_colors];
+    //     VECTOR_2D pos = {rand() % WIDTH, rand() % HEIGHT};
+    //     VECTOR_2D vel = {
+    //         (double)rand() / RAND_MAX * (rand() % 2 ? 1 : -1),
+    //         (double)rand() / RAND_MAX * (rand() % 2 ? 1 : -1),
+    //     };
+    //     createCircle(color, radius, π * radius * radius * DENSITY, pos, vel);
+    // }
 
-    // // Central massive body (like the Sun)
-    // VECTOR_2D pos1 = {WIDTH / 2.0, HEIGHT / 2.0};
-    // VECTOR_2D vel1 = {0, 0};
-    // double radius1 = 40;
-    // double mass1 = 100000000;
-    // createCircle(SDL_MapRGB(surface->format, RGB_YELLOW), radius1, mass1, pos1, vel1);
+    // Central massive body (like the Sun)
+    VECTOR_2D pos1 = {WIDTH / 2.0, HEIGHT / 2.0};
+    VECTOR_2D vel1 = {0, 0};
+    double radius1 = 40;
+    double mass1 = 100000000;
+    createCircle(SDL_MapRGB(surface->format, RGB_YELLOW), radius1, mass1, pos1, vel1);
 
-    // // Smaller orbiting body (like a planet)
-    // double distance = 300; // distance from center
-    // VECTOR_2D pos2 = {pos1.x + distance, pos1.y};
-    // double radius2 = 20; // smaller radius
-    // double mass2 = 100000;
+    // Smaller orbiting body (like a planet)
+    double distance = 300; // distance from center
+    VECTOR_2D pos2 = {pos1.x + distance, pos1.y};
+    double radius2 = 20; // smaller radius
+    double mass2 = 100000;
 
-    // // Circular orbit velocity perpendicular to radius
-    // double v = SDL_sqrt(G * mass1 / distance);
-    // VECTOR_2D vel2 = {0, -v}; // moving upwards for clockwise orbit
-    // createCircle(SDL_MapRGB(surface->format, RGB_CYAN), radius2, mass2, pos2, vel2);
+    // Circular orbit velocity perpendicular to radius
+    double v = SDL_sqrt(G * mass1 / distance);
+    VECTOR_2D vel2 = {0, -v}; // moving upwards for clockwise orbit
+    createCircle(SDL_MapRGB(surface->format, RGB_CYAN), radius2, mass2, pos2, vel2);
 
-    Uint8 running = 1, elasticity = 1;
+    Uint8 elasticity = 1;
     int frames = 0;
     double frame_time_sum = 0, max_frame_time = 0, min_frame_time = dt;
+    SDL_bool running = SDL_TRUE;
     while (running)
     {
         Uint64 start = SDL_GetPerformanceCounter();
@@ -130,15 +136,27 @@ int main()
             switch (event.type)
             {
             case SDL_QUIT:
-                running = 0;
+                running = SDL_FALSE;
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                switch (event.button.button)
+                {
+                case SDL_BUTTON_LEFT:
+                    VECTOR_2D point = {event.button.x, event.button.y};
+                    for (int i = 0; i < size; i++)
+                    {
+                        if (isPointInsideCircle(point, circles[i]))
+                        {
+                            printf("ID: %d\n", circles[i].id);
+                            fflush(stdout);
+                            break;
+                        }
+                    }
+                    break;
+                }
                 break;
             }
         }
-        // if (size == 0 || size == 1)
-        // {
-        //     displayInfo();
-        //     break;
-        // }
         SDL_FillRect(surface, NULL, 0);
         runSimulation(elasticity);
         SDL_UpdateWindowSurface(window);
@@ -168,6 +186,12 @@ int main()
     fclose(log_file);
     free(circles);
     return 0;
+}
+
+SDL_bool isPointInsideCircle(VECTOR_2D point, CIRCLE circle)
+{
+    double dist_sq = SDL_pow(point.x - circle.node.pos.x, 2) + SDL_pow(point.y - circle.node.pos.y, 2);
+    return dist_sq <= circle.radius * circle.radius;
 }
 
 void displayInfo()
@@ -221,6 +245,7 @@ void createCircle(Uint32 color, double radius, double mass, VECTOR_2D pos, VECTO
     circle.node = node;
 
     SDL_LockMutex(circles_mutex);
+
     if (size >= cap)
     {
         CIRCLE *temp = (CIRCLE *)realloc(circles, cap * 2 * sizeof(CIRCLE));
@@ -228,26 +253,31 @@ void createCircle(Uint32 color, double radius, double mass, VECTOR_2D pos, VECTO
         {
             cap *= 2;
             circles = temp;
-            memset(circles + size, 0, (cap - size) * sizeof(CIRCLE));
+            // memset(circles + size, 0, (cap - size) * sizeof(CIRCLE));
         }
         else
-            printf("REALLOCATION FAILED.");
+            fprintf(stderr, "REALLOCATION FAILED in %s\n", __func__);
     }
     circles[size++] = circle;
+
     SDL_UnlockMutex(circles_mutex);
 }
 
 void runSimulation(Uint8 elasticity)
 {
+    SDL_LockMutex(circles_mutex);
+
     sanitiseCircles();
     simulateForces(elasticity);
     updatePositions();
-    FillCircles();
+    for (int i = 0; i < size; i++)
+        FillCircle(circles[i]);
+
+    SDL_UnlockMutex(circles_mutex);
 }
 
 void sanitiseCircles()
 {
-    SDL_LockMutex(circles_mutex);
     for (int i = 0; i < size; i++)
     {
         if (circles[i].alive)
@@ -265,12 +295,11 @@ void sanitiseCircles()
         {
             cap /= 2;
             circles = temp;
-            memset(circles + size, 0, (cap - size) * sizeof(CIRCLE));
+            // memset(circles + size, 0, (cap - size) * sizeof(CIRCLE));
         }
         else
-            printf("REALLOCATION FAILED\n");
+            fprintf(stderr, "REALLOCATION FAILED in %s\n", __func__);
     }
-    SDL_UnlockMutex(circles_mutex);
 }
 
 void simulateForces(Uint8 elasticity)
@@ -369,12 +398,6 @@ void updatePositions()
     }
 }
 
-void FillCircles()
-{
-    for (int i = 0; i < size; i++)
-        FillCircle(circles[i]);
-}
-
 void FillCircle(CIRCLE circle)
 {
     int x = circle.node.pos.x;
@@ -401,50 +424,114 @@ void FillCircle(CIRCLE circle)
 int SDLCALL waitInput(void *data)
 {
     const Uint32 *colors = (Uint32 *)(data);
-    const int BUFFER_SIZE = 100;
-    char input[BUFFER_SIZE];
-    printf("Usage: create <color> <radius> <mass> <posx> <posy> <velx> <vely>\n");
-    // createCircle(colors[0], 100, 1000000, (VECTOR_2D){1000, 500}, (VECTOR_2D){10, 10});
+    printf("Supported Commands: create, clear, set\n");
     while (1)
     {
-        fgets(input, BUFFER_SIZE, stdin);
+        char input[INPUT_BUFFER_SIZE];
+        char command[10];
+        printf("Reading input...\n");
+        fgets(input, INPUT_BUFFER_SIZE, stdin);
+        sscanf(input, "%s", command);
+        if (strncasecmp(command, "create", sizeof command) == 0)
+            handleCreateInput(input);
+        else if (strncasecmp(command, "clear", sizeof command) == 0)
+            handleClearInput(input);
+        else if (strncasecmp(command, "set", sizeof command) == 0)
+            handleSetInput(input);
+        else
+            printf("%s is not a supported command\n", command);
+        // char *command = strtok(input, " ");
+        // if (strcasecmp(command, "create") != 0)
+        // {
+        //     printf("Usage: create <color> <radius> <mass> <posx> <posy> <velx> <vely>\n");
+        //     continue;
+        // }
 
-        char *command = strtok(input, " ");
-        if (strcasecmp(command, "create") != 0)
-        {
-            printf("Usage: create <color> <radius> <mass> <posx> <posy> <velx> <vely>\n");
-            continue;
-        }
+        // char *color_tok = strtok(NULL, " ");
+        // int color_index = -1;
+        // switch (*color_tok)
+        // {
+        // case 'r':
+        //     color_index = 0;
+        //     break;
+        // case 'g':
+        //     color_index = 1;
+        //     break;
+        // case 'b':
+        //     color_index = 2;
+        //     break;
+        // case 'y':
+        //     color_index = 3;
+        //     break;
+        // case 'c':
+        //     color_index = 4;
+        //     break;
+        // case 'm':
+        //     color_index = 5;
+        //     break;
+        // }
 
-        char *color_tok = strtok(NULL, " ");
-        int color_index = -1;
-        switch (*color_tok)
-        {
-        case 'r':
-            color_index = 0;
-            break;
-        case 'g':
-            color_index = 1;
-            break;
-        case 'b':
-            color_index = 2;
-            break;
-        case 'y':
-            color_index = 3;
-            break;
-        case 'c':
-            color_index = 4;
-            break;
-        case 'm':
-            color_index = 5;
-            break;
-        }
+        // double radius = atof(strtok(NULL, " "));
+        // double mass = atof(strtok(NULL, " "));
+        // VECTOR_2D pos = {atof(strtok(NULL, " ")), atof(strtok(NULL, " "))};
+        // VECTOR_2D vel = {atof(strtok(NULL, " ")), atof(strtok(NULL, " "))};
 
-        double radius = atof(strtok(NULL, " "));
-        double mass = atof(strtok(NULL, " "));
-        VECTOR_2D pos = {atof(strtok(NULL, " ")), atof(strtok(NULL, " "))};
-        VECTOR_2D vel = {atof(strtok(NULL, " ")), atof(strtok(NULL, " "))};
-
-        createCircle(colors[color_index], radius, mass, pos, vel);
+        // createCircle(colors[color_index], radius, mass, pos, vel);
     }
+}
+
+void handleCreateInput(char *input)
+{
+}
+
+void handleClearInput(char *input)
+{
+    SDL_LockMutex(circles_mutex);
+    char *delims = " \t\r\n";
+    strtok(input, delims); // discard the command
+    char *flag = strtok(NULL, delims);
+    if (flag == NULL || strcasecmp(flag, "--all") == 0)
+    {
+        // clear the object array before the next frame
+        size = 0;
+        cap = DEFAULT_CAPACITY;
+    }
+    else if (strcasecmp(flag, "--id") == 0)
+    {
+        char *id_str = strtok(NULL, delims);
+        if (id_str == NULL)
+            printf("ID not provided\n");
+        else
+        {
+            int id;
+            if (sscanf(id_str, "%d", &id) != 1)
+                printf("ID field is invalid\n");
+            else
+            {
+                CIRCLE *circleFound = findCircleById(id);
+                if (circleFound != NULL)
+                    circleFound->alive = SDL_FALSE;
+                else
+                    printf("Circle with ID: %d does not exist\n", id);
+            }
+        }
+    }
+    else
+        printf("Invalid Flag: %s\n", flag);
+
+    SDL_UnlockMutex(circles_mutex);
+}
+
+void handleSetInput(char *input)
+{
+}
+
+CIRCLE *findCircleById(int id)
+{
+    for (int i = 0; i < size; i++)
+    {
+        if (circles[i].id == id)
+            return circles + i;
+    }
+    return NULL;
 }
